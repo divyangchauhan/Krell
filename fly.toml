@@ -1,0 +1,38 @@
+# fly.toml — KRELL deploy config for Fly.io
+#
+# IMPORTANT: KRELL keeps all game state in memory and runs ONE room. Never run
+# more than one instance — keep the machine count at 1 (`fly scale count 1`).
+# The 30Hz loop + bots must stay alive even with zero players, so the machine
+# is configured to never auto-stop.
+
+app = "krell"              # must be globally unique — change if this name is taken
+primary_region = "bom"     # Mumbai, India
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true          # browser loads over https → client uses wss:// automatically
+  auto_stop_machines = "off"  # keep the game loop + bots running with no players
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"      # WebSocket connections (humans cap at 10 + spectators/reconnects)
+    soft_limit = 25
+    hard_limit = 30
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

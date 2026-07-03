@@ -1,0 +1,14 @@
+.git
+node_modules
+.pnpm-store
+test
+test-results
+playwright-report
+blob-report
+*.log
+.env
+.env.*
+.vscode
+.idea
+.DS_Store
+CHATLOG.md
