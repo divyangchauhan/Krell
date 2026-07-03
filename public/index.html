@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KRELL</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23070812'/%3E%3Ctext x='16' y='23' font-size='20' font-family='monospace' font-weight='bold' fill='%23b36bff' text-anchor='middle'%3EK%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ============ HUD (in-game) ============ -->
+  <div id="hud" class="hidden">
+    <div id="topbar">
+      <div class="score score-k"><span id="score-k-name">KRELL</span><b id="score-k">0</b></div>
+      <div id="clock">
+        <div id="round-label">ROUND 1</div>
+        <div id="timer">1:40</div>
+        <div id="bomb-lit" class="hidden">⬢ CHARGE ARMED</div>
+      </div>
+      <div class="score score-w"><b id="score-w">0</b><span id="score-w-name">WARDENS</span></div>
+    </div>
+
+    <div id="alive-bar"><div id="alive-k"></div><div id="alive-w"></div></div>
+
+    <canvas id="minimap" width="200" height="150"></canvas>
+    <div id="netstat"><span id="net-dot"></span><span id="net-ping">— ms</span></div>
+
+    <div id="killfeed"></div>
+
+    <div id="center-msg" class="hidden"></div>
+    <div id="sub-msg" class="hidden"></div>
+    <div id="progress-wrap" class="hidden">
+      <div id="progress-label">PLANTING</div>
+      <div id="progress-track"><div id="progress-fill"></div></div>
+    </div>
+
+    <div id="hud-bl">
+      <div id="chatlog"></div>
+      <div id="chat-entry" class="hidden"><span>SAY:</span><input id="chat-input" maxlength="120" autocomplete="off"></div>
+      <div id="vitals">
+        <div class="vital"><span class="vital-ico">✚</span><div class="vital-bar"><div id="hp-fill"></div></div><b id="hp-num">100</b></div>
+        <div class="vital"><span class="vital-ico">⬡</span><div class="vital-bar"><div id="ar-fill"></div></div><b id="ar-num">0</b></div>
+      </div>
+    </div>
+
+    <div id="hud-br">
+      <div id="money">$800</div>
+      <div id="weapon-name">KP-9 SIDEARM</div>
+      <div id="ammo"><b id="ammo-mag">13</b><span id="ammo-res">/ 39</span></div>
+      <div id="slots">
+        <div class="slotchip" data-slot="1"><i>1</i><span id="slot1-name">—</span></div>
+        <div class="slotchip" data-slot="2"><i>2</i><span>KP-9</span></div>
+        <div class="slotchip" data-slot="3"><i>3</i><span>BLADE</span></div>
+        <div class="slotchip" data-slot="4"><i>G</i><span id="slot4-name">×0</span></div>
+      </div>
+    </div>
+
+    <div id="spectate" class="hidden">
+      <div id="spectate-label">SPECTATING</div>
+      <div id="spectate-name">—</div>
+      <div class="spectate-hint">CLICK to cycle targets</div>
+    </div>
+
+    <div id="buyhint" class="hidden">PRESS <b>B</b> TO OPEN SUPPLY CACHE</div>
+  </div>
+
+  <!-- ============ Buy menu ============ -->
+  <div id="buymenu" class="overlay hidden">
+    <div class="buy-panel">
+      <div class="buy-head">
+        <h2>SUPPLY CACHE</h2>
+        <div id="buy-money">$800</div>
+      </div>
+      <div id="buy-grid"></div>
+      <div class="buy-foot">Press number to buy &nbsp;·&nbsp; <b>B</b> / <b>ESC</b> close</div>
+    </div>
+  </div>
+
+  <!-- ============ Scoreboard ============ -->
+  <div id="scoreboard" class="overlay hidden">
+    <div class="sb-panel">
+      <div class="sb-title">KRELL // SITE-9 <span id="sb-score">0 — 0</span></div>
+      <div class="sb-cols">
+        <div class="sb-team" id="sb-krell"><h3>KRELL</h3><table><thead><tr><th>OPERATIVE</th><th>K</th><th>D</th><th>$</th><th>MS</th></tr></thead><tbody></tbody></table></div>
+        <div class="sb-team" id="sb-warden"><h3>WARDENS</h3><table><thead><tr><th>OPERATIVE</th><th>K</th><th>D</th><th>$</th><th>MS</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Escape menu ============ -->
+  <div id="escmenu" class="overlay hidden">
+    <div class="menu-panel">
+      <h2>PAUSED UPLINK</h2>
+      <button id="btn-resume" class="btn">RESUME</button>
+      <label class="volume-row">VOLUME <input id="volume" type="range" min="0" max="100" value="70"></label>
+      <div class="controls-grid">
+        <span>WASD</span><span>move</span>
+        <span>SHIFT</span><span>walk (quiet)</span>
+        <span>L-MOUSE</span><span>aim / fire</span>
+        <span>R-MOUSE</span><span>scope (LANCE)</span>
+        <span>R</span><span>reload</span>
+        <span>B</span><span>buy menu</span>
+        <span>E (hold)</span><span>plant / defuse</span>
+        <span>G</span><span>grenade</span>
+        <span>1·2·3</span><span>weapon slots</span>
+        <span>TAB</span><span>scoreboard</span>
+        <span>ENTER</span><span>chat</span>
+      </div>
+      <button id="btn-leave" class="btn btn-dim">ABANDON MISSION</button>
+    </div>
+  </div>
+
+  <!-- ============ Main menu ============ -->
+  <div id="mainmenu" class="overlay">
+    <canvas id="menu-bg"></canvas>
+    <div class="menu-core">
+      <div class="logo">
+        <h1>KRELL</h1>
+        <div class="logo-sub">SITE-9 // VOID CHARGE PROTOCOL</div>
+      </div>
+      <div class="menu-card">
+        <label for="name-input">CALLSIGN</label>
+        <input id="name-input" maxlength="16" spellcheck="false" autocomplete="off" placeholder="OPERATIVE">
+        <button id="btn-play" class="btn btn-play">DEPLOY</button>
+        <div id="menu-status"></div>
+      </div>
+      <div class="menu-brief">
+        <div><b class="t-k">KRELL</b> deliver the <b>VOID CHARGE</b> to a rift site and arm it.</div>
+        <div><b class="t-w">WARDENS</b> hold the sites. Neutralize anything that breaches.</div>
+        <div class="menu-hint">First squad to 8 rounds takes SITE-9. Bots hold the line until humans arrive.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Disconnect ============ -->
+  <div id="disconnected" class="overlay hidden">
+    <div class="menu-panel">
+      <h2>UPLINK LOST</h2>
+      <p id="dc-reason">Connection to SITE-9 dropped.</p>
+      <button id="btn-reconnect" class="btn">RECONNECT</button>
+    </div>
+  </div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
