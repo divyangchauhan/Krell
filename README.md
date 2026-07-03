@@ -1,21 +1,29 @@
 # KRELL
 
-A browser-based multiplayer top-down tactical shooter — a Counter-Strike–style
-round game reskinned as a raid on a derelict alien facility, **SITE-9**. Two
-squads fight over a defusable objective (the **Void Charge**) across a best-of
-match, with a buy economy, bots that fill empty slots, and an authoritative
-server.
+**A browser-based multiplayer top-down tactical shooter** — Counter-Strike's
+round loop transplanted into a raid on a derelict alien facility, **SITE-9**.
+Two squads fight over a defusable objective (the **Void Charge**) across a
+best-of match, with a buy economy, bots that fill empty slots, and an
+authoritative server.
 
 No build step, no framework, no art assets — pure Node + vanilla ES modules +
-Canvas, with all audio synthesized at runtime via WebAudio.
+Canvas, with **all audio synthesized at runtime** via WebAudio.
 
-```
+<p>
+  <a href="https://krell.fly.dev"><b>▶ Play the live demo</b></a> &nbsp;·&nbsp;
+  <img alt="no build step" src="https://img.shields.io/badge/build-none-05060d?labelColor=b36bff">
+  <img alt="vanilla JS" src="https://img.shields.io/badge/js-vanilla%20ESM-3fd9ff?labelColor=05060d">
+  <img alt="node 18+" src="https://img.shields.io/badge/node-%E2%89%A518-41e596?labelColor=05060d">
+  <img alt="zero assets" src="https://img.shields.io/badge/assets-zero-ffd166?labelColor=05060d">
+</p>
+
+```sh
 pnpm install
 pnpm start
 # open http://localhost:3000
 ```
 
-Bots fill both teams immediately, so it's playable solo the moment it boots.
+Bots fill both teams immediately, so it's playable **solo the moment it boots**.
 Open a second browser tab — or share your LAN address — for live multiplayer.
 
 ---
@@ -25,9 +33,10 @@ Open a second browser tab — or share your LAN address — for live multiplayer
 - **KRELL** (attackers) carry the Void Charge to a rift site (**A — Reactor** or
   **B — Obelisk**) and arm it. **WARDENS** (defenders) hold the sites and defuse.
 - A round ends by **elimination**, **charge detonation**, **defuse**, or the
-  **round timer** (defenders win if it runs out un-armed). First squad to **8**
-  rounds wins the match; it then resets and rolls again.
-- **Economy:** earn money for kills, round wins, plants and defuses; spend it in
+  **round timer** (defenders win if it runs out un-armed). A planted charge
+  overrides elimination — Wardens must still defuse even if every attacker is dead.
+- First squad to **8** rounds wins the match; it then resets and rolls again.
+- **Economy:** earn money for kills, round wins, plants, and defuses; spend it in
   the supply cache during the freeze/buy window. Losing streaks pay out more.
 
 ### Controls
@@ -73,13 +82,15 @@ test/        node + playwright verification scripts
 delta snapshots. The client runs **prediction** for the local player
 (re-simulating unacknowledged inputs through the *same* movement code the server
 uses, in `shared/util.js`), **reconciliation** with smooth error correction, and
-**entity interpolation** (~100 ms) for everyone else. Hits are **lag-compensated**
-by rewinding targets to roughly when the shooter saw them.
+**entity interpolation** (~100 ms) for everyone else. Firing is **predicted
+locally too** — the gunshot, muzzle, tracer, and recoil fire the instant you
+click, while the server stays authoritative for hits, damage, and ammo. Hits are
+**lag-compensated** by rewinding targets to roughly when the shooter saw them.
 
 **Fog of war.** Visibility is enforced server-side: you only receive enemies a
 living teammate can actually see (distance + line-of-sight). The client draws a
 matching visibility polygon so you can't see — or be told about — what's around
-the corner.
+the corner. Wallhacks are impossible by construction, not by trust.
 
 **Audio.** Every sound (gunfire per weapon, explosions, footsteps, reloads, UI
 blips, the bomb's accelerating beep) is synthesized from oscillators and filtered
@@ -89,7 +100,7 @@ noise at runtime and positionally panned. There are no audio files.
 
 ## Development
 
-```
+```sh
 pnpm start            # run the server (also: pnpm dev)
 node test/smoke.js    # fake WS clients drive a round; asserts combat events
 node test/botsim.js   # headless bot match, logs navigation/objective state
@@ -103,4 +114,5 @@ The Playwright scripts need a running server and a one-time
 
 Configuration (tick rate, round timings, economy, weapon stats, the map) lives in
 `public/shared/` and is imported unchanged by both server and client, so tuning
-stays in one place.
+stays in one place. See [VISION.md](VISION.md) for the full design intent,
+architecture invariants, and style guide.
