@@ -108,24 +108,23 @@ state.onEvent = (ev) => {
   switch (type) {
     case 'shot': {
       const [pid, wid, x, y, tx, ty, hit] = a;
-      const mine = pid === myId;
-      audio.shot(wid, x, y, mine);
-      renderer.tracer(x, y, tx, ty);
-      renderer.muzzle(x, y, Math.atan2(ty - y, tx - x));
-      if (mine) {
-        const kick = { sniper: 9, shotgun: 7, rifle: 3, smg: 1.6, pistol: 2.2 }[wid] || 2;
-        renderer.addShake(kick);
+      if (pid === myId) {
+        // own shot feedback is predicted locally (see 'ownshot'); confirm the hit only
         if (hit) { renderer.hitmarker(); audio.hitmarker(); }
+      } else {
+        audio.shot(wid, x, y, false);
+        renderer.tracer(x, y, tx, ty);
+        renderer.muzzle(x, y, Math.atan2(ty - y, tx - x));
       }
       break;
     }
     case 'swing': {
       const [pid, x, y] = a;
-      audio.swing(x, y, pid === myId);
+      if (pid !== myId) audio.swing(x, y, false);  // own swing predicted ('ownswing')
       break;
     }
     case 'dry':
-      if (a[0] === myId) audio.dryfire();
+      // own dry-fire predicted locally ('owndry'); server echo ignored to avoid a double click
       break;
     case 'impact': {
       const [x, y, nx, ny] = a;
@@ -224,9 +223,24 @@ state.onEvent = (ev) => {
       if (r && !r.bot) ui.toast(`${r.name} joined the operation`);
       break;
     }
-    // local synthesized events
+    // local synthesized events (client-predicted; no server round-trip)
     case 'ownstep':
       audio.footstep(null, 0, true);
+      break;
+    case 'ownshot': {
+      const [wid, x, y, ends] = a;
+      audio.shot(wid, x, y, true);
+      renderer.muzzle(x, y, Math.atan2(ends[0][1] - y, ends[0][0] - x));
+      for (const [tx, ty] of ends) renderer.tracer(x, y, tx, ty);
+      const kick = { sniper: 9, shotgun: 7, rifle: 3, smg: 1.6, pistol: 2.2 }[wid] || 2;
+      renderer.addShake(kick);
+      break;
+    }
+    case 'ownswing':
+      audio.swing(a[0], a[1], true);
+      break;
+    case 'owndry':
+      audio.dryfire();
       break;
     case 'beep':
       audio.bombBeep(a[0], a[1], a[2]);
