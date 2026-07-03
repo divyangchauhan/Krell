@@ -98,6 +98,15 @@ public/js/        net · input · audio · game (prediction) · render · ui · 
 - **Client timing:** interpolation ~100ms behind (`INTERP_MS`); reconciliation
   snaps + hides error via a decaying `smooth` offset; lag compensation rewinds
   3 ticks server-side (`REWIND_TICKS`).
+- **Fire prediction:** the local player's own weapon feedback (gunshot, muzzle,
+  tracer, recoil, dry-click) is predicted client-side in `game.js predictFire()`,
+  mirroring the server's `tryFire()` cadence, so firing feels instant over real
+  latency instead of costing a round-trip. The server stays authoritative for
+  hits/damage/ammo — hitmarkers only show on the confirmed `shot` event, and
+  `predMag()` tracks unacked shots by input seq. Prediction emits local-only
+  events (`ownshot`/`ownswing`/`owndry`) handled in `main.js`; the server's own
+  `shot`/`swing`/`dry` echo skips audio/tracer for *you* to avoid double
+  feedback. Never predict anything that reveals hidden enemy state.
 - **Pixel convention:** the canvas is sized in **device pixels**
   (`innerWidth * devicePixelRatio`) and `camera.zoom` includes dpr. Any
   screen↔world conversion must multiply mouse CSS px by `devicePixelRatio`
@@ -164,7 +173,7 @@ public/js/        net · input · audio · game (prediction) · render · ui · 
 ## 6. Current state & deliberate omissions
 
 **Built and verified:** full CS loop, buy menu, bots with objective play,
-prediction/interp/lag-comp netcode, server-side fog of war, minimap, killfeed,
+movement + fire prediction / interp / lag-comp netcode, server-side fog of war, minimap, killfeed,
 chat, scoreboard (Tab), spectate-on-death with click-to-cycle, HE grenades
 with bounce physics, sniper scope (RMB, 1.95× render-side zoom), floating
 combat text, multi-kill callouts, ping indicator, procedural audio throughout,

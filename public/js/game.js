@@ -3,7 +3,7 @@
 // ============================================================
 
 import { PHASE, INTERP_MS, BTN, PLAYER_RADIUS, TEAM } from '/shared/const.js';
-import { stepPlayer, clamp, lerp, angleLerp, dist2 } from '/shared/util.js';
+import { stepPlayer, clamp, lerp, angleLerp, dist2, raycastWalls } from '/shared/util.js';
 import { WEAPONS, weaponSpread } from '/shared/weapons.js';
 import { WALLS, MAP_W, MAP_H } from '/shared/map.js';
 
@@ -45,9 +45,20 @@ export class GameState {
     this.lastKiller = null;
 
     this.onEvent = null;                     // (ev) => void   render/ui/audio hook
-    this.fireFlash = 0;                      // local muzzle for own weapon
     this.lastStepSoundAt = 0;
+
+    // ---- client-side fire prediction (own weapon feedback, instant) ----
+    // The server stays authoritative for hits/damage/ammo; this only makes the
+    // gunshot sound, muzzle, tracer and recoil fire the moment you click,
+    // instead of after a full round-trip. Mirrors server tryFire() cadence.
+    this.prevButtons = 0;
+    this.predNextFireAt = 0;                 // local perf.now() ms gate between shots
+    this.predReloadUntil = 0;                // local reload lockout
+    this.shotSeqs = [];                      // input seqs we predicted a shot on (unacked)
   }
+
+  // predicted mag = server mag minus shots the server hasn't acked yet
+  predMag() { return this.me.mag - this.shotSeqs.length; }
 
   svNow() { return performance.now() + this.svOffset; }
 
@@ -97,6 +108,7 @@ export class GameState {
     // self
     const me = m.me;
     const wasAlive = this.me.alive;
+    const prevWid = this.me.wid;
     Object.assign(this.me, {
       hp: me.hp, armor: me.ar, money: me.mo, alive: !!me.al,
       slot: me.sl, wid: me.wid,
@@ -109,12 +121,25 @@ export class GameState {
     // reconciliation
     this.reconcile(m.ls, me);
 
+    // fire-prediction reconcile: drop acked shots; a weapon swap resets cadence
+    this.shotSeqs = this.shotSeqs.filter((s) => s > m.ls);
+    if (this.me.wid !== prevWid) {
+      this.shotSeqs.length = 0;
+      this.predReloadUntil = 0;
+      this.predNextFireAt = performance.now() + 120; // draw time (mirrors setSlot)
+    }
+    if (!this.me.alive) { this.shotSeqs.length = 0; this.predReloadUntil = 0; }
+
     if (!wasAlive && this.me.alive) {
       this.predicted.x = me.x; this.predicted.y = me.y;
       this.predicted.vx = 0; this.predicted.vy = 0;
       this.smooth.x = 0; this.smooth.y = 0;
       this.spectateId = 0;
       this.lastKiller = null;
+      this.prevButtons = 0;
+      this.predNextFireAt = 0;
+      this.predReloadUntil = 0;
+      this.shotSeqs.length = 0;
     }
     if (wasAlive && !this.me.alive) this.pickSpectate();
     // mid-round joiners start dead with no spectate target
@@ -169,6 +194,8 @@ export class GameState {
     if (this.me.alive) {
       const keys = this.input.keys();
       const buttons = this.input.buttons();
+      const pressed = buttons & ~this.prevButtons;  // rising edges (semi-auto)
+      this.prevButtons = buttons;
       const rooted = this.me.plant > 0 || this.me.defuse > 0;
       const frozen = this.phase === PHASE.FREEZE || this.phase === PHASE.STARTING || this.phase === PHASE.OVER;
       this.seq++;
@@ -183,6 +210,9 @@ export class GameState {
       this.pending.push(inp);
       if (this.pending.length > 90) this.pending.shift();
       this.sendAccum.push([inp.seq, Math.round(dtMs), keys, +this.me.angle.toFixed(3), buttons]);
+
+      // predict own weapon feedback so firing feels instant (server confirms hits)
+      if (!frozen) this.predictFire(now, buttons, pressed);
 
       // own footsteps
       const spd = Math.hypot(this.predicted.vx, this.predicted.vy);
@@ -211,6 +241,51 @@ export class GameState {
     // local crosshair heat decay (server echoes authoritative value)
     const w = WEAPONS[this.me.wid] || WEAPONS.pistol;
     if (!w.melee) this.me.heat = Math.max(0, this.me.heat - (w.spreadDecay || 0.2) * dt);
+  }
+
+  // Predict the local weapon firing so feedback is instant. Mirrors the cadence
+  // of server tryFire(); emits local-only events ('ownshot'/'ownswing'/'owndry')
+  // that render/audio pick up. Hits/damage/ammo remain server-authoritative.
+  predictFire(now, buttons, pressed) {
+    if (!(buttons & BTN.FIRE)) return;
+    if (now < this.predNextFireAt) return;
+    const w = WEAPONS[this.me.wid] || WEAPONS.pistol;
+    if (!w.auto && !(pressed & BTN.FIRE)) return;   // semi-auto: only on click edge
+    if (this.me.reloadLeft > 0 || now < this.predReloadUntil) return;
+
+    const self = this.selfPos();
+
+    if (w.melee) {
+      this.predNextFireAt = now + w.fireDelay;
+      this.onEvent?.(['ownswing', self.x, self.y]);
+      return;
+    }
+
+    if (this.predMag() <= 0) {
+      if (pressed & BTN.FIRE) {
+        this.onEvent?.(['owndry']);
+        this.predReloadUntil = now + w.reloadMs;    // server auto-reloads on empty
+      }
+      return;
+    }
+
+    this.predNextFireAt = now + w.fireDelay;
+    this.shotSeqs.push(this.seq);
+
+    // approximate tracers (server is authoritative on real hits)
+    const spd = Math.hypot(this.predicted.vx, this.predicted.vy);
+    const spread = weaponSpread(w, spd, this.me.heat);
+    const pellets = w.pellets || 1;
+    const ends = [];
+    for (let i = 0; i < pellets; i++) {
+      const a = this.me.angle + (Math.random() * 2 - 1) * spread;
+      const dx = Math.cos(a), dy = Math.sin(a);
+      const hit = raycastWalls(self.x, self.y, dx, dy, w.range, WALLS);
+      ends.push([+(self.x + dx * hit.d).toFixed(1), +(self.y + dy * hit.d).toFixed(1)]);
+    }
+    this.onEvent?.(['ownshot', w.id, +self.x.toFixed(1), +self.y.toFixed(1), ends]);
+
+    if (this.predMag() <= 0) this.predReloadUntil = now + w.reloadMs;
   }
 
   // visual position of self (prediction + smoothing)
