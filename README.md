@@ -10,16 +10,11 @@ No build step, no framework, no art assets — pure Node + vanilla ES modules +
 Canvas, with **all audio synthesized at runtime** via WebAudio.
 
 <p>
-  <a href="https://krell.fly.dev">
-    <img alt="Play the live demo" src="https://img.shields.io/badge/%E2%96%B6%20play%20the%20live%20demo-b36bff?style=for-the-badge&labelColor=05060d">
-  </a>
-</p>
-
-<p>
-  <img alt="no build step" src="https://img.shields.io/badge/build-none-b36bff?labelColor=05060d">
-  <img alt="vanilla ESM" src="https://img.shields.io/badge/js-vanilla%20ESM-3fd9ff?labelColor=05060d">
-  <img alt="node 18+" src="https://img.shields.io/badge/node-%E2%89%A518-41e596?labelColor=05060d">
-  <img alt="zero assets" src="https://img.shields.io/badge/assets-zero-ffd166?labelColor=05060d">
+  <a href="https://krell.fly.dev"><img alt="Play the live demo" src="https://img.shields.io/badge/%E2%96%B6%20play%20the%20live%20demo-b36bff?style=for-the-badge&labelColor=05060d"></a>
+  <img alt="no build step" src="https://img.shields.io/badge/build-none-b36bff?style=for-the-badge&labelColor=05060d">
+  <img alt="vanilla ESM" src="https://img.shields.io/badge/js-vanilla%20ESM-3fd9ff?style=for-the-badge&labelColor=05060d">
+  <img alt="node 18+" src="https://img.shields.io/badge/node-%E2%89%A518-41e596?style=for-the-badge&labelColor=05060d">
+  <img alt="zero assets" src="https://img.shields.io/badge/assets-zero-ffd166?style=for-the-badge&labelColor=05060d">
 </p>
 
 ```sh
